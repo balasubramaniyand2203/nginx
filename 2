@@ -1,0 +1,31 @@
+FROM apache/airflow:2.1.0-python3.7
+
+USER root
+
+# Fix Debian buster repo (since it's EOL)
+RUN sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
+    sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && \
+    sed -i '/buster-updates/d' /etc/apt/sources.list
+
+# Install dependencies
+RUN apt-get update && apt-get install -y wget tar gzip && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install OpenJDK 17 (HotSpot build)
+RUN wget https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.10+8/OpenJDK17U-jdk_x64_linux_hotspot_17.0.10_8.tar.gz -O /tmp/openjdk17.tar.gz && \
+    mkdir -p /usr/lib/jvm && \
+    tar -xzf /tmp/openjdk17.tar.gz -C /usr/lib/jvm && \
+    rm /tmp/openjdk17.tar.gz
+
+# Set Java environment variables
+ENV JAVA_HOME=/usr/lib/jvm/jdk-17.0.10+8
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
+# ✅ Max memory settings for Java (auto-adjusts with container limits)
+ENV JAVA_TOOL_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseContainerSupport -XX:MaxRAMPercentage=80 -XX:InitialRAMPercentage=50 -XX:MinRAMPercentage=25"
+
+# Install Python dependencies
+ADD requirements.txt /opt/requirements.txt
+RUN pip install --no-cache-dir -r /opt/requirements.txt
+
+USER airflow
